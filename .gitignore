@@ -1,0 +1,6 @@
+# makepkg artifacts (per-package .gitignore already whitelists only PKGBUILD/.SRCINFO/*.install)
+src/
+pkg/
+*.pkg.tar.*
+*.log
+.omc/

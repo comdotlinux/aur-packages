@@ -1,0 +1,19 @@
+pkgbase = qodana-cli-bin
+	pkgdesc = JetBrains Qodana CLI - code quality tool for analyzing projects
+	pkgver = 2026.2.2
+	pkgrel = 1
+	url = https://github.com/JetBrains/qodana-cli
+	arch = x86_64
+	arch = aarch64
+	license = Apache-2.0
+	provides = qodana
+	provides = qodana-cli
+	conflicts = qodana
+	conflicts = qodana-cli
+	options = !debug
+	source_x86_64 = qodana-cli-bin-2026.2.2-x86_64.tar.gz::https://github.com/JetBrains/qodana-cli/releases/download/v2026.2.2/qodana_linux_x86_64.tar.gz
+	sha256sums_x86_64 = b1fc01fb5825f4c6382f9cedcfe97d4a8eeaaddc9f5384a3b5870ca63e231c6f
+	source_aarch64 = qodana-cli-bin-2026.2.2-aarch64.tar.gz::https://github.com/JetBrains/qodana-cli/releases/download/v2026.2.2/qodana_linux_arm64.tar.gz
+	sha256sums_aarch64 = fb01602e595cbb75b237153f325a3156801dcd0cec8b284d4a22da3d3cbd5efe
+
+pkgname = qodana-cli-bin

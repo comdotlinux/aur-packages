@@ -1,0 +1,243 @@
+name: Update AUR packages
+
+# Two jobs on purpose:
+#   update  - runs upstream build code (makepkg). No secrets, no sudo, read-only token, no persisted
+#             git creds. Its only output is an artifact that the next job treats as UNTRUSTED.
+#   publish - trusted code only. Holds the AUR key and a write token. For each package the build
+#             job reports, it re-derives the bump itself from main (pkgver from the artifact,
+#             pkgrel=1, updpkgsums, printsrcinfo) and publishes only if the result is byte-identical
+#             to what was test-built. So a compromised build can neither forge a success nor
+#             smuggle edits into a PKGBUILD.
+
+on:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: 'Space-separated package names to check (default: all)'
+        required: false
+        default: ''
+  push:
+    branches: [main]
+    paths:
+      - '*/**'   # any file inside a package dir; non-package dirs are filtered out in the publish step
+
+concurrency:
+  group: aur-update
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  update:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    outputs:
+      updated: ${{ steps.result.outputs.updated }}
+      failed: ${{ steps.result.outputs.failed }}
+    steps:
+      - name: Install toolchain
+        run: pacman -Syu --noconfirm git pacman-contrib sudo python uv
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install every depends/makedepends/checkdepends as root (so makepkg -s never needs sudo)
+        run: |
+          # shellcheck disable=SC2046
+          pacman -S --needed --noconfirm --asdeps $(sed -nE 's/^\t(make|check)?depends(_[a-z0-9_]+)? = //p' ./*/.SRCINFO | sed 's/[<>=].*//' | sort -u)
+
+      - name: Create unprivileged build user (no sudo)
+        run: |
+          useradd -m builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Install aur-checker
+        run: sudo -u builder -H uv tool install git+https://codeberg.org/arch-linux-aur/aur-checker@12320eb0b2a73700ac4f1c32274f65632e4f4368 # v0.6.0
+
+      - name: Check upstream and update packages
+        env:
+          # read-only token (permissions: contents: read), only for upstream API rate limits
+          GITHUB_TOKEN: ${{ github.token }}
+          PACKAGES: ${{ inputs.packages }}
+        run: |
+          # shellcheck disable=SC2086
+          sudo -u builder -H env GITHUB_TOKEN="$GITHUB_TOKEN" PATH="/home/builder/.local/bin:$PATH" \
+            aur-checker update --yes --path "$PWD" $PACKAGES | tee update.log || true
+
+      - name: Collect packages whose test build succeeded
+        id: result
+        run: |
+          # aur-checker prints "Successfully updated <name>!" only after makepkg -sf passed.
+          # This list is advisory: the publish job re-derives and verifies every entry.
+          ok=$(grep -oP '^\s*Successfully updated \K[^!\s]+' update.log | sort -u)
+          changed=$(sudo -u builder git status --porcelain -- '*/PKGBUILD' '*/.SRCINFO' | awk '{print $2}' | cut -d/ -f1 | sort -u)
+          updated=""; failed=""
+          for d in $changed; do
+            if printf '%s\n' "$ok" | grep -qxF -- "$d"; then
+              updated="$updated $d"
+              sudo -u builder mkdir -p "_out/$d"
+              sudo -u builder cp -P "$d/PKGBUILD" "$d/.SRCINFO" "_out/$d/"
+            else
+              echo "::warning title=$d::build failed or incomplete, discarding changes"
+              failed="$failed $d"
+            fi
+          done
+          echo "updated=${updated# }" >> "$GITHUB_OUTPUT"
+          echo "failed=${failed# }" >> "$GITHUB_OUTPUT"
+          echo "updated: ${updated:-none}"; echo "failed: ${failed:-none}"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: steps.result.outputs.updated != ''
+        with:
+          name: updated-packages
+          path: _out/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    needs: [update]
+    if: ${{ !cancelled() && (github.event_name == 'push' || needs.update.outputs.updated != '' || needs.update.outputs.failed != '') }}
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - name: Install tools
+        run: |
+          pacman -Syu --noconfirm git openssh sudo pacman-contrib
+          useradd -m checker   # makepkg/updpkgsums refuse to run as root
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Configure SSH for AUR (pinned host key)
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+        run: |
+          install -dm700 /root/.ssh
+          printf '%s\n' "$AUR_SSH_KEY" | install -m600 /dev/stdin /root/.ssh/aur
+          # Fingerprint SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4, as published on https://aur.archlinux.org
+          echo 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > /root/.ssh/known_hosts
+          echo 'GIT_SSH_COMMAND=ssh -i /root/.ssh/aur -o UserKnownHostsFile=/root/.ssh/known_hosts -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes' >> "$GITHUB_ENV"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: github.event_name != 'push' && needs.update.outputs.updated != ''
+        with:
+          name: updated-packages
+          path: _artifact
+
+      - name: Re-derive each bump from main and verify it matches what was built
+        if: github.event_name != 'push' && needs.update.outputs.updated != ''
+        id: verify
+        env:
+          UPDATED: ${{ needs.update.outputs.updated }}
+        run: |
+          verified=""; failed=""
+          for d in $UPDATED; do
+            if ! printf '%s' "$d" | grep -qE '^[a-z0-9][a-z0-9@._+-]*$' \
+               || ! git ls-files --error-unmatch "$d/PKGBUILD" "$d/.SRCINFO" >/dev/null 2>&1 \
+               || ! grep -qxF -- "pkgbase = $d" "$d/.SRCINFO"; then
+              echo "::error title=$d::not a package tracked on main, ignoring"; failed="$failed $d"; continue
+            fi
+            a="_artifact/$d"
+            if [ ! -f "$a/PKGBUILD" ] || [ -L "$a/PKGBUILD" ] || [ ! -f "$a/.SRCINFO" ] || [ -L "$a/.SRCINFO" ]; then
+              echo "::error title=$d::artifact incomplete"; failed="$failed $d"; continue
+            fi
+            newver=$(sed -n 's/^\tpkgver = //p' "$a/.SRCINFO" | head -1)
+            if ! printf '%s' "$newver" | grep -qE '^[A-Za-z0-9._+~]+$'; then
+              echo "::error title=$d::invalid pkgver in artifact"; failed="$failed $d"; continue
+            fi
+            # never downgrade (equal is allowed: checksum-drift refresh keeps the version)
+            if [ "$(vercmp "$newver" "$(sed -n 's/^\tpkgver = //p' "$d/.SRCINFO" | head -1)")" -lt 0 ]; then
+              echo "::error title=$d::artifact pkgver $newver is older than main"; failed="$failed $d"; continue
+            fi
+            # Same edit aur-checker makes (update_pkgver): set pkgver, reset pkgrel=1. Then checksums + .SRCINFO.
+            w=$(mktemp -d)
+            (cd "$d" && git ls-files -z | xargs -0 cp --parents -t "$w")   # PKGBUILD + .install + local sources from main
+            chown -R checker "$w"
+            sudo -u checker -H sed -i -E -e "s/^(pkgver=)['\"]?[^'\"]+['\"]?/\1$newver/" -e "s/^(pkgrel=)['\"]?[^'\"]+['\"]?/\11/" "$w/PKGBUILD"
+            if ! sudo -u checker -H sh -c "cd '$w' && updpkgsums >/dev/null 2>&1 && makepkg --printsrcinfo > .SRCINFO"; then
+              echo "::error title=$d::updpkgsums / printsrcinfo failed while re-deriving"; failed="$failed $d"; continue
+            fi
+            if ! cmp -s "$w/PKGBUILD" "$a/PKGBUILD" || ! cmp -s "$w/.SRCINFO" "$a/.SRCINFO"; then
+              echo "::error title=$d::built files differ from re-derived bump (aur-checker changed more than pkgver/pkgrel/checksums, or the artifact was tampered). Apply manually."
+              diff -u "$w/PKGBUILD" "$a/PKGBUILD" || true
+              failed="$failed $d"; continue
+            fi
+            install -m644 "$w/PKGBUILD" "$d/PKGBUILD"; install -m644 "$w/.SRCINFO" "$d/.SRCINFO"
+            verified="$verified $d"
+          done
+          echo "verified=${verified# }" >> "$GITHUB_OUTPUT"
+          echo "failed=${failed# }" >> "$GITHUB_OUTPUT"
+          echo "verified: ${verified:-none}"; echo "rejected: ${failed:-none}"
+
+      - name: Determine packages to publish
+        id: dirs
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          VERIFIED: ${{ steps.verify.outputs.verified }}
+        run: |
+          if [ "$EVENT" = push ]; then
+            if [ -n "$BEFORE" ] && git cat-file -e "$BEFORE" 2>/dev/null; then base=$BEFORE; else base=HEAD~1; fi
+            dirs=$(git diff --name-only --diff-filter=d "$base" HEAD | cut -d/ -f1 | sort -u)
+          else
+            dirs=$VERIFIED
+          fi
+          echo "dirs=$(printf '%s\n' "$dirs" | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+          echo "to publish: ${dirs:-none}"
+
+      - name: Publish to AUR
+        env:
+          EVENT: ${{ github.event_name }}
+          DIRS: ${{ steps.dirs.outputs.dirs }}
+          BUILD_FAILED: ${{ needs.update.outputs.failed }}
+          VERIFY_FAILED: ${{ steps.verify.outputs.failed }}
+          AUR_COMMIT_NAME: ${{ secrets.AUR_COMMIT_NAME }}
+          AUR_COMMIT_EMAIL: ${{ secrets.AUR_COMMIT_EMAIL }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          failed=""
+          for d in $DIRS; do
+            [ -f "$d/PKGBUILD" ] || continue   # not a package dir (scripts/, .github/, root files, or a removed package)
+            if [ "$EVENT" = push ]; then
+              # makepkg refuses root and needs a writable dir: check .SRCINFO in a scratch copy owned by `checker`
+              w=$(mktemp -d); (cd "$d" && git ls-files -z | xargs -0 cp --parents -t "$w"); chown -R checker "$w"
+              if ! sudo -u checker -H sh -c "cd '$w' && makepkg --printsrcinfo" | cmp -s - "$d/.SRCINFO"; then
+                echo "::error title=$d::.SRCINFO does not match PKGBUILD, run: makepkg --printsrcinfo > .SRCINFO"
+                failed="$failed $d"; continue
+              fi
+            fi
+            if scripts/publish-aur.sh "$d"; then
+              if [ "$EVENT" != push ]; then
+                ver=$(sed -n 's/^\tpkgver = //p' "$d/.SRCINFO")
+                git commit -qm "$d: update to $ver" -- "$d" || failed="$failed $d"
+              fi
+            else
+              failed="$failed $d"
+            fi
+          done
+          if [ "$EVENT" != push ] && [ -n "$(git log --oneline '@{u}..HEAD')" ]; then
+            git pull --rebase -q
+            GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader \
+              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" git push
+          fi
+          [ -z "$BUILD_FAILED" ]  || echo "::error::test build failed for:$BUILD_FAILED"
+          [ -z "$VERIFY_FAILED" ] || echo "::error::rejected before publish:$VERIFY_FAILED"
+          [ -z "$failed" ]        || echo "::error::AUR publish failed for:$failed"
+          [ -z "$failed$BUILD_FAILED$VERIFY_FAILED" ]

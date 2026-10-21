@@ -125,7 +125,7 @@ package() {
 }
 ```
 
-- Use `::` syntax to rename source: `"custom-name.tar.gz::https://..."`
+- Use `::` syntax to rename source: `"custom-name.tar.gz::https://..."`. The local name MUST contain `${pkgver}` (and the arch for per-arch sources): `makepkg -g`/`updpkgsums` reuse any existing file of that name in the package dir, so a bare `squawk::url` silently rehashed a stale 2.66.0 download for three releases (squawk-bin 2.67.0 to 2.70.0-1). aur-checker now refuses to update such entries.
 - Check tarball structure first: `tar -tzf file.tar.gz`
 - Get checksum: `sha256sum file.tar.gz`
 

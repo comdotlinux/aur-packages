@@ -15,7 +15,7 @@ You are assisting an Arch Linux AUR package maintainer.
 
 **One git repo** (`github.com/comdotlinux/aur-packages`, remote `origin`). One directory per package, **directory name == `pkgbase`** (checked by `scripts/publish-aur.sh`). Package dirs are plain folders, not git repos and not submodules. Each contains `PKGBUILD`, `.SRCINFO`, optional `*.install` / local source files (e.g. `clangen-bin/clangen.desktop`), and a `.gitignore` that whitelists exactly those files. Everything git-tracked in a package dir is what gets published to AUR; files removed here are removed on AUR (mirror).
 
-Packages on AUR (29): see `README.md` table (generated from `.SRCINFO`). `mcp-cli-bin` on AUR belongs to another maintainer (dbirks); never add it here.
+Packages on AUR (30): see `README.md` table (generated from `.SRCINFO`). `mcp-cli-bin` on AUR belongs to another maintainer (dbirks); never add it here.
 
 ## How changes reach AUR
 

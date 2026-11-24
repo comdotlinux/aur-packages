@@ -31,6 +31,7 @@ Secrets: `AUR_SSH_KEY` (dedicated ed25519 key registered on the AUR account), `A
 | open-pencil-bin | [aur](https://aur.archlinux.org/packages/open-pencil-bin) | https://github.com/open-pencil/open-pencil |
 | pgrok-bin | [aur](https://aur.archlinux.org/packages/pgrok-bin) | https://github.com/pgrok/pgrok |
 | pgrokd-bin | [aur](https://aur.archlinux.org/packages/pgrokd-bin) | https://github.com/pgrok/pgrok |
+| pgterm-bin | [aur](https://aur.archlinux.org/packages/pgterm-bin) | https://github.com/pgrundev/pgterm |
 | pipenet | [aur](https://aur.archlinux.org/packages/pipenet) | https://github.com/punkpeye/pipenet |
 | playwright-cli | [aur](https://aur.archlinux.org/packages/playwright-cli) | https://playwright.dev/ |
 | qodana-cli-bin | [aur](https://aur.archlinux.org/packages/qodana-cli-bin) | https://github.com/JetBrains/qodana-cli |

@@ -60,7 +60,7 @@ jobs:
           chown -R builder:builder "$GITHUB_WORKSPACE"
 
       - name: Install aur-checker
-        run: sudo -u builder -H uv tool install git+https://codeberg.org/arch-linux-aur/aur-checker@b15af3c90b32a3c0bb2e71ddce0b9b1a65122586 # v0.6.0 + Forgejo upstreams, shared-filename guard (#67)
+        run: sudo -u builder -H uv tool install git+https://codeberg.org/arch-linux-aur/aur-checker@fa904ffd534eea6a314f5ef6660b1b7eb8a8204b # v0.7.0
 
       - name: Check upstream and update packages
         env:

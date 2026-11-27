@@ -29,6 +29,7 @@ Secrets: `AUR_SSH_KEY` (dedicated ed25519 key registered on the AUR account), `A
 | kotlin-toolchain | [aur](https://aur.archlinux.org/packages/kotlin-toolchain) | https://kotlin-toolchain.org |
 | mcp-cli-git | [aur](https://aur.archlinux.org/packages/mcp-cli-git) | https://github.com/philschmid/mcp-cli |
 | open-pencil-bin | [aur](https://aur.archlinux.org/packages/open-pencil-bin) | https://github.com/open-pencil/open-pencil |
+| pgbook-bin | [aur](https://aur.archlinux.org/packages/pgbook-bin) | https://github.com/pgrundev/pgbook |
 | pgboxdb-bin | [aur](https://aur.archlinux.org/packages/pgboxdb-bin) | https://github.com/pgrundev/pgboxdb |
 | pgrok-bin | [aur](https://aur.archlinux.org/packages/pgrok-bin) | https://github.com/pgrok/pgrok |
 | pgrokd-bin | [aur](https://aur.archlinux.org/packages/pgrokd-bin) | https://github.com/pgrok/pgrok |

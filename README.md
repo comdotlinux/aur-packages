@@ -29,6 +29,7 @@ Secrets: `AUR_SSH_KEY` (dedicated ed25519 key registered on the AUR account), `A
 | kotlin-toolchain | [aur](https://aur.archlinux.org/packages/kotlin-toolchain) | https://kotlin-toolchain.org |
 | mcp-cli-git | [aur](https://aur.archlinux.org/packages/mcp-cli-git) | https://github.com/philschmid/mcp-cli |
 | open-pencil-bin | [aur](https://aur.archlinux.org/packages/open-pencil-bin) | https://github.com/open-pencil/open-pencil |
+| pgboxdb-bin | [aur](https://aur.archlinux.org/packages/pgboxdb-bin) | https://github.com/pgrundev/pgboxdb |
 | pgrok-bin | [aur](https://aur.archlinux.org/packages/pgrok-bin) | https://github.com/pgrok/pgrok |
 | pgrokd-bin | [aur](https://aur.archlinux.org/packages/pgrokd-bin) | https://github.com/pgrok/pgrok |
 | pgterm-bin | [aur](https://aur.archlinux.org/packages/pgterm-bin) | https://github.com/pgrundev/pgterm |
@@ -46,4 +47,4 @@ Secrets: `AUR_SSH_KEY` (dedicated ed25519 key registered on the AUR account), `A
 | velo-bin | [aur](https://aur.archlinux.org/packages/velo-bin) | https://github.com/avihaymenahem/velo |
 | vex-tui-bin | [aur](https://aur.archlinux.org/packages/vex-tui-bin) | https://github.com/CodeOne45/vex-tui |
 
-Not auto-updated (aur-checker skips them): `bleamd-git`, `mcp-cli-git` (VCS packages), `forgejo-mcp-bin` (self-hosted Forgejo source, not recognised by aur-checker 0.6.0).
+Not auto-updated (aur-checker skips them): `bleamd-git`, `mcp-cli-git` (VCS packages).
